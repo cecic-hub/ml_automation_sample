@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>report.html</title>
+    <style>body {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 12px;
+  /* do not increase min-width as some may use split screens */
+  min-width: 800px;
+  color: #999;
+}
+
+h1 {
+  font-size: 24px;
+  color: black;
+}
+
+h2 {
+  font-size: 16px;
+  color: black;
+}
+
+p {
+  color: black;
+}
+
+a {
+  color: #999;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+/******************************
+ * SUMMARY INFORMATION
+ ******************************/
+#environment td {
+  padding: 5px;
+  border: 1px solid #E6E6E6;
+}
+#environment tr:nth-child(odd) {
+  background-color: #f6f6f6;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed,
+.passed .col-result {
+  color: green;
+}
+
+span.skipped,
+span.xfailed,
+span.rerun,
+.skipped .col-result,
+.xfailed .col-result,
+.rerun .col-result {
+  color: orange;
+}
+
+span.error,
+span.failed,
+span.xpassed,
+.error .col-result,
+.failed .col-result,
+.xpassed .col-result {
+  color: red;
+}
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+#results-table {
+  border: 1px solid #e6e6e6;
+  color: #999;
+  font-size: 12px;
+  width: 100%;
+}
+#results-table th,
+#results-table td {
+  padding: 5px;
+  border: 1px solid #E6E6E6;
+  text-align: left;
+}
+#results-table th {
+  font-weight: bold;
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+.log {
+  background-color: #e6e6e6;
+  border: 1px solid #e6e6e6;
+  color: black;
+  display: block;
+  font-family: "Courier New", Courier, monospace;
+  height: 230px;
+  overflow-y: scroll;
+  padding: 5px;
+  white-space: pre-wrap;
+}
+.log:only-child {
+  height: inherit;
+}
+
+div.image {
+  border: 1px solid #e6e6e6;
+  float: right;
+  height: 240px;
+  margin-left: 5px;
+  overflow: hidden;
+  width: 320px;
+}
+div.image img {
+  width: 320px;
+}
+
+div.video {
+  border: 1px solid #e6e6e6;
+  float: right;
+  height: 240px;
+  margin-left: 5px;
+  overflow: hidden;
+  width: 320px;
+}
+div.video video {
+  overflow: hidden;
+  width: 320px;
+  height: 240px;
+}
+
+.collapsed {
+  display: none;
+}
+
+.expander::after {
+  content: " (show details)";
+  color: #BBB;
+  font-style: italic;
+  cursor: pointer;
+}
+
+.collapser::after {
+  content: " (hide details)";
+  color: #BBB;
+  font-style: italic;
+  cursor: pointer;
+}
+
+/*------------------
+ * 3. Sorting items
+ *------------------*/
+.sortable {
+  cursor: pointer;
+}
+
+.sort-icon {
+  font-size: 0px;
+  float: left;
+  margin-right: 5px;
+  margin-top: 5px;
+  /*triangle*/
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+}
+.inactive .sort-icon {
+  /*finish triangle*/
+  border-top: 8px solid #E6E6E6;
+}
+.asc.active .sort-icon {
+  /*finish triangle*/
+  border-bottom: 8px solid #999;
+}
+.desc.active .sort-icon {
+  /*finish triangle*/
+  border-top: 8px solid #999;
+}
+</style></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    let visibleString = getQueryParameter('visible') || 'all';
+    visibleString = visibleString.toLowerCase();
+    const checkedItems = visibleString.split(',');
+
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++) {
+        filterItems[i].hidden = false;
+
+        if (visibleString != 'all') {
+            filterItems[i].checked = checkedItems.includes(filterItems[i].getAttribute('data-test-result'));
+            filterTable(filterItems[i]);
+        }
+    }
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 30-May-2023 at 12:25:26 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.2.0</p>
+    <h2>Summary</h2>
+    <p>7 tests ran in 108.30 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">1 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">6 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">pytest_cases/test_mallcz.py::TestMallcz::test_check_carousel[carousel_one-hooper_one-hp_element_one]</td>
+          <td class="col-duration">11.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div class="image"><a href="html_screenshots/scr20230530-122349.png"><img src="html_screenshots/scr20230530-122349.png"></a></div></div>
+            <div class="log">self = &lt;test_mallcz.TestMallcz object at 0x1029f7100&gt;, extra = [], carousel_number = &#x27;carousel_one&#x27;, hooper_number = &#x27;hooper_one&#x27;, hp_element_number = &#x27;hp_element_one&#x27;<br/><br/>    @pytest.mark.parametrize(&#x27;carousel_number, hooper_number, hp_element_number&#x27;,<br/>                             [(&quot;carousel_one&quot;, &quot;hooper_one&quot;, &quot;hp_element_one&quot;),<br/>                              (&quot;carousel_two&quot;, &quot;hooper_two&quot;, &quot;hp_element_two&quot;),<br/>                              (&quot;carousel_three&quot;, &quot;hooper_three&quot;, &quot;hp_element_three&quot;),<br/>                              (&quot;carousel_four&quot;, &quot;hooper_four&quot;, &quot;hp_element_four&quot;),<br/>                              (&quot;carousel_five&quot;, &quot;hooper_five&quot;, &quot;hp_element_five&quot;),<br/>                              (&quot;carousel_six&quot;, &quot;hooper_six&quot;, &quot;hp_element_six&quot;),<br/>                              (&quot;carousel_seven&quot;, &quot;hooper_seven&quot;, &quot;hp_element_seven&quot;)])<br/>    def test_check_carousel(self, extra, carousel_number, hooper_number, hp_element_number):<br/>        print(f&quot;Page title is {self.driver.title}&quot;)<br/>        bf.clicks(self.driver, &quot;mcz_landing&quot;, &quot;allow_privacy&quot;)<br/>        self.driver.delete_all_cookies()<br/>        bf.scroll_until_element_exist(self.driver, &quot;mcz_landing&quot;, carousel_number, &quot;+ 200&quot;)<br/>        bf.scroll_at_top(self.driver, &quot;mcz_landing&quot;, carousel_number)<br/>    <br/>        hp_exist = bf.is_element_exist(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>        count = 0<br/>        while hp_exist:<br/>            bf.clicks(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>            count += 1<br/>            print(f&quot;Click hooper times: {count}&quot;)<br/>            hp_exist = bf.is_element_exist(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>        print(f&quot;All hoppers are clicked&quot;)<br/>        num_unique_ele = len(commons.get_elements(self.driver, &quot;mcz_landing&quot;, hp_element_number))<br/>        if num_unique_ele != 15:<br/>&gt;           raise Exception(f&quot;Number of unique elements is not 15, actual element is {num_unique_ele}&quot;)<br/><span class="error">E           Exception: Number of unique elements is not 15, actual element is 20</span><br/><br/>pytest_cases/test_mallcz.py:32: Exception<br/> -----------------------------Captured stdout setup------------------------------ <br/>initiating Firefox driver
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Page title is MALL.CZ – bílé zboží, elektronika, PC, outdoor, hobby, hračky, kosmetika, chovatelské potřeby
+Clicks Element allow_privacy from Page mcz_landing
+Scroll to element carousel_one from Page mcz_landing, show element on top of the page
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 1
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 2
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 3
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 4
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 5
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 6
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 7
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 8
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 9
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 10
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 11
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 12
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 13
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 14
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 15
+Clicks Element hooper_one from Page mcz_landing
+Click hooper times: 16
+All hoppers are clicked
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Closed browser
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">pytest_cases/test_mallcz.py::TestMallcz::test_check_carousel[carousel_two-hooper_two-hp_element_two]</td>
+          <td class="col-duration">12.96</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div class="image"><a href="html_screenshots/scr20230530-122402.png"><img src="html_screenshots/scr20230530-122402.png"></a></div></div>
+            <div class="log">self = &lt;test_mallcz.TestMallcz object at 0x1029f7190&gt;, extra = [], carousel_number = &#x27;carousel_two&#x27;, hooper_number = &#x27;hooper_two&#x27;, hp_element_number = &#x27;hp_element_two&#x27;<br/><br/>    @pytest.mark.parametrize(&#x27;carousel_number, hooper_number, hp_element_number&#x27;,<br/>                             [(&quot;carousel_one&quot;, &quot;hooper_one&quot;, &quot;hp_element_one&quot;),<br/>                              (&quot;carousel_two&quot;, &quot;hooper_two&quot;, &quot;hp_element_two&quot;),<br/>                              (&quot;carousel_three&quot;, &quot;hooper_three&quot;, &quot;hp_element_three&quot;),<br/>                              (&quot;carousel_four&quot;, &quot;hooper_four&quot;, &quot;hp_element_four&quot;),<br/>                              (&quot;carousel_five&quot;, &quot;hooper_five&quot;, &quot;hp_element_five&quot;),<br/>                              (&quot;carousel_six&quot;, &quot;hooper_six&quot;, &quot;hp_element_six&quot;),<br/>                              (&quot;carousel_seven&quot;, &quot;hooper_seven&quot;, &quot;hp_element_seven&quot;)])<br/>    def test_check_carousel(self, extra, carousel_number, hooper_number, hp_element_number):<br/>        print(f&quot;Page title is {self.driver.title}&quot;)<br/>        bf.clicks(self.driver, &quot;mcz_landing&quot;, &quot;allow_privacy&quot;)<br/>        self.driver.delete_all_cookies()<br/>        bf.scroll_until_element_exist(self.driver, &quot;mcz_landing&quot;, carousel_number, &quot;+ 200&quot;)<br/>        bf.scroll_at_top(self.driver, &quot;mcz_landing&quot;, carousel_number)<br/>    <br/>        hp_exist = bf.is_element_exist(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>        count = 0<br/>        while hp_exist:<br/>            bf.clicks(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>            count += 1<br/>            print(f&quot;Click hooper times: {count}&quot;)<br/>            hp_exist = bf.is_element_exist(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>        print(f&quot;All hoppers are clicked&quot;)<br/>        num_unique_ele = len(commons.get_elements(self.driver, &quot;mcz_landing&quot;, hp_element_number))<br/>        if num_unique_ele != 15:<br/>&gt;           raise Exception(f&quot;Number of unique elements is not 15, actual element is {num_unique_ele}&quot;)<br/><span class="error">E           Exception: Number of unique elements is not 15, actual element is 12</span><br/><br/>pytest_cases/test_mallcz.py:32: Exception<br/> -----------------------------Captured stdout setup------------------------------ <br/>initiating Firefox driver
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Page title is MALL.CZ – bílé zboží, elektronika, PC, outdoor, hobby, hračky, kosmetika, chovatelské potřeby
+Clicks Element allow_privacy from Page mcz_landing
+Scroll DOWN with range + 200, Times: 1
+Scroll DOWN with range + 200, Times: 2
+Scroll DOWN with range + 200, Times: 3
+Scroll DOWN with range + 200, Times: 4
+Scroll DOWN with range + 200, Times: 5
+Scroll DOWN with range + 200, Times: 6
+Scroll DOWN with range + 200, Times: 7
+Scroll to element carousel_two from Page mcz_landing, show element on top of the page
+Clicks Element hooper_two from Page mcz_landing
+Click hooper times: 1
+Clicks Element hooper_two from Page mcz_landing
+Click hooper times: 2
+Clicks Element hooper_two from Page mcz_landing
+Click hooper times: 3
+Clicks Element hooper_two from Page mcz_landing
+Click hooper times: 4
+Clicks Element hooper_two from Page mcz_landing
+Click hooper times: 5
+Clicks Element hooper_two from Page mcz_landing
+Click hooper times: 6
+Clicks Element hooper_two from Page mcz_landing
+Click hooper times: 7
+Clicks Element hooper_two from Page mcz_landing
+Click hooper times: 8
+Clicks Element hooper_two from Page mcz_landing
+Click hooper times: 9
+All hoppers are clicked
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Closed browser
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">pytest_cases/test_mallcz.py::TestMallcz::test_check_carousel[carousel_three-hooper_three-hp_element_three]</td>
+          <td class="col-duration">13.98</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div class="image"><a href="html_screenshots/scr20230530-122417.png"><img src="html_screenshots/scr20230530-122417.png"></a></div></div>
+            <div class="log">self = &lt;test_mallcz.TestMallcz object at 0x1029f71c0&gt;, extra = [], carousel_number = &#x27;carousel_three&#x27;, hooper_number = &#x27;hooper_three&#x27;, hp_element_number = &#x27;hp_element_three&#x27;<br/><br/>    @pytest.mark.parametrize(&#x27;carousel_number, hooper_number, hp_element_number&#x27;,<br/>                             [(&quot;carousel_one&quot;, &quot;hooper_one&quot;, &quot;hp_element_one&quot;),<br/>                              (&quot;carousel_two&quot;, &quot;hooper_two&quot;, &quot;hp_element_two&quot;),<br/>                              (&quot;carousel_three&quot;, &quot;hooper_three&quot;, &quot;hp_element_three&quot;),<br/>                              (&quot;carousel_four&quot;, &quot;hooper_four&quot;, &quot;hp_element_four&quot;),<br/>                              (&quot;carousel_five&quot;, &quot;hooper_five&quot;, &quot;hp_element_five&quot;),<br/>                              (&quot;carousel_six&quot;, &quot;hooper_six&quot;, &quot;hp_element_six&quot;),<br/>                              (&quot;carousel_seven&quot;, &quot;hooper_seven&quot;, &quot;hp_element_seven&quot;)])<br/>    def test_check_carousel(self, extra, carousel_number, hooper_number, hp_element_number):<br/>        print(f&quot;Page title is {self.driver.title}&quot;)<br/>        bf.clicks(self.driver, &quot;mcz_landing&quot;, &quot;allow_privacy&quot;)<br/>        self.driver.delete_all_cookies()<br/>        bf.scroll_until_element_exist(self.driver, &quot;mcz_landing&quot;, carousel_number, &quot;+ 200&quot;)<br/>        bf.scroll_at_top(self.driver, &quot;mcz_landing&quot;, carousel_number)<br/>    <br/>        hp_exist = bf.is_element_exist(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>        count = 0<br/>        while hp_exist:<br/>            bf.clicks(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>            count += 1<br/>            print(f&quot;Click hooper times: {count}&quot;)<br/>            hp_exist = bf.is_element_exist(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>        print(f&quot;All hoppers are clicked&quot;)<br/>        num_unique_ele = len(commons.get_elements(self.driver, &quot;mcz_landing&quot;, hp_element_number))<br/>        if num_unique_ele != 15:<br/>&gt;           raise Exception(f&quot;Number of unique elements is not 15, actual element is {num_unique_ele}&quot;)<br/><span class="error">E           Exception: Number of unique elements is not 15, actual element is 14</span><br/><br/>pytest_cases/test_mallcz.py:32: Exception<br/> -----------------------------Captured stdout setup------------------------------ <br/>initiating Firefox driver
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Page title is MALL.CZ – bílé zboží, elektronika, PC, outdoor, hobby, hračky, kosmetika, chovatelské potřeby
+Clicks Element allow_privacy from Page mcz_landing
+Scroll DOWN with range + 200, Times: 1
+Scroll DOWN with range + 200, Times: 2
+Scroll DOWN with range + 200, Times: 3
+Scroll DOWN with range + 200, Times: 4
+Scroll DOWN with range + 200, Times: 5
+Scroll DOWN with range + 200, Times: 6
+Scroll DOWN with range + 200, Times: 7
+Scroll to element carousel_three from Page mcz_landing, show element on top of the page
+Clicks Element hooper_three from Page mcz_landing
+Click hooper times: 1
+Clicks Element hooper_three from Page mcz_landing
+Click hooper times: 2
+Clicks Element hooper_three from Page mcz_landing
+Click hooper times: 3
+Clicks Element hooper_three from Page mcz_landing
+Click hooper times: 4
+Clicks Element hooper_three from Page mcz_landing
+Click hooper times: 5
+Clicks Element hooper_three from Page mcz_landing
+Click hooper times: 6
+Clicks Element hooper_three from Page mcz_landing
+Click hooper times: 7
+Clicks Element hooper_three from Page mcz_landing
+Click hooper times: 8
+Clicks Element hooper_three from Page mcz_landing
+Click hooper times: 9
+Clicks Element hooper_three from Page mcz_landing
+Click hooper times: 10
+Clicks Element hooper_three from Page mcz_landing
+Click hooper times: 11
+All hoppers are clicked
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Closed browser
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">pytest_cases/test_mallcz.py::TestMallcz::test_check_carousel[carousel_four-hooper_four-hp_element_four]</td>
+          <td class="col-duration">17.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div class="image"><a href="html_screenshots/scr20230530-122435.png"><img src="html_screenshots/scr20230530-122435.png"></a></div></div>
+            <div class="log">self = &lt;test_mallcz.TestMallcz object at 0x1029f72b0&gt;, extra = [], carousel_number = &#x27;carousel_four&#x27;, hooper_number = &#x27;hooper_four&#x27;, hp_element_number = &#x27;hp_element_four&#x27;<br/><br/>    @pytest.mark.parametrize(&#x27;carousel_number, hooper_number, hp_element_number&#x27;,<br/>                             [(&quot;carousel_one&quot;, &quot;hooper_one&quot;, &quot;hp_element_one&quot;),<br/>                              (&quot;carousel_two&quot;, &quot;hooper_two&quot;, &quot;hp_element_two&quot;),<br/>                              (&quot;carousel_three&quot;, &quot;hooper_three&quot;, &quot;hp_element_three&quot;),<br/>                              (&quot;carousel_four&quot;, &quot;hooper_four&quot;, &quot;hp_element_four&quot;),<br/>                              (&quot;carousel_five&quot;, &quot;hooper_five&quot;, &quot;hp_element_five&quot;),<br/>                              (&quot;carousel_six&quot;, &quot;hooper_six&quot;, &quot;hp_element_six&quot;),<br/>                              (&quot;carousel_seven&quot;, &quot;hooper_seven&quot;, &quot;hp_element_seven&quot;)])<br/>    def test_check_carousel(self, extra, carousel_number, hooper_number, hp_element_number):<br/>        print(f&quot;Page title is {self.driver.title}&quot;)<br/>        bf.clicks(self.driver, &quot;mcz_landing&quot;, &quot;allow_privacy&quot;)<br/>        self.driver.delete_all_cookies()<br/>        bf.scroll_until_element_exist(self.driver, &quot;mcz_landing&quot;, carousel_number, &quot;+ 200&quot;)<br/>        bf.scroll_at_top(self.driver, &quot;mcz_landing&quot;, carousel_number)<br/>    <br/>        hp_exist = bf.is_element_exist(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>        count = 0<br/>        while hp_exist:<br/>            bf.clicks(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>            count += 1<br/>            print(f&quot;Click hooper times: {count}&quot;)<br/>            hp_exist = bf.is_element_exist(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>        print(f&quot;All hoppers are clicked&quot;)<br/>        num_unique_ele = len(commons.get_elements(self.driver, &quot;mcz_landing&quot;, hp_element_number))<br/>        if num_unique_ele != 15:<br/>&gt;           raise Exception(f&quot;Number of unique elements is not 15, actual element is {num_unique_ele}&quot;)<br/><span class="error">E           Exception: Number of unique elements is not 15, actual element is 30</span><br/><br/>pytest_cases/test_mallcz.py:32: Exception<br/> -----------------------------Captured stdout setup------------------------------ <br/>initiating Firefox driver
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Page title is MALL.CZ – bílé zboží, elektronika, PC, outdoor, hobby, hračky, kosmetika, chovatelské potřeby
+Clicks Element allow_privacy from Page mcz_landing
+Scroll DOWN with range + 200, Times: 1
+Scroll DOWN with range + 200, Times: 2
+Scroll DOWN with range + 200, Times: 3
+Scroll DOWN with range + 200, Times: 4
+Scroll DOWN with range + 200, Times: 5
+Scroll DOWN with range + 200, Times: 6
+Scroll DOWN with range + 200, Times: 7
+Scroll to element carousel_four from Page mcz_landing, show element on top of the page
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 1
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 2
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 3
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 4
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 5
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 6
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 7
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 8
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 9
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 10
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 11
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 12
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 13
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 14
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 15
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 16
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 17
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 18
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 19
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 20
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 21
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 22
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 23
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 24
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 25
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 26
+Clicks Element hooper_four from Page mcz_landing
+Click hooper times: 27
+All hoppers are clicked
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Closed browser
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">pytest_cases/test_mallcz.py::TestMallcz::test_check_carousel[carousel_six-hooper_six-hp_element_six]</td>
+          <td class="col-duration">12.14</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div class="image"><a href="html_screenshots/scr20230530-122502.png"><img src="html_screenshots/scr20230530-122502.png"></a></div></div>
+            <div class="log">self = &lt;test_mallcz.TestMallcz object at 0x1029f73d0&gt;, extra = [], carousel_number = &#x27;carousel_six&#x27;, hooper_number = &#x27;hooper_six&#x27;, hp_element_number = &#x27;hp_element_six&#x27;<br/><br/>    @pytest.mark.parametrize(&#x27;carousel_number, hooper_number, hp_element_number&#x27;,<br/>                             [(&quot;carousel_one&quot;, &quot;hooper_one&quot;, &quot;hp_element_one&quot;),<br/>                              (&quot;carousel_two&quot;, &quot;hooper_two&quot;, &quot;hp_element_two&quot;),<br/>                              (&quot;carousel_three&quot;, &quot;hooper_three&quot;, &quot;hp_element_three&quot;),<br/>                              (&quot;carousel_four&quot;, &quot;hooper_four&quot;, &quot;hp_element_four&quot;),<br/>                              (&quot;carousel_five&quot;, &quot;hooper_five&quot;, &quot;hp_element_five&quot;),<br/>                              (&quot;carousel_six&quot;, &quot;hooper_six&quot;, &quot;hp_element_six&quot;),<br/>                              (&quot;carousel_seven&quot;, &quot;hooper_seven&quot;, &quot;hp_element_seven&quot;)])<br/>    def test_check_carousel(self, extra, carousel_number, hooper_number, hp_element_number):<br/>        print(f&quot;Page title is {self.driver.title}&quot;)<br/>        bf.clicks(self.driver, &quot;mcz_landing&quot;, &quot;allow_privacy&quot;)<br/>        self.driver.delete_all_cookies()<br/>        bf.scroll_until_element_exist(self.driver, &quot;mcz_landing&quot;, carousel_number, &quot;+ 200&quot;)<br/>        bf.scroll_at_top(self.driver, &quot;mcz_landing&quot;, carousel_number)<br/>    <br/>        hp_exist = bf.is_element_exist(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>        count = 0<br/>        while hp_exist:<br/>            bf.clicks(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>            count += 1<br/>            print(f&quot;Click hooper times: {count}&quot;)<br/>            hp_exist = bf.is_element_exist(self.driver, &quot;mcz_landing&quot;, hooper_number)<br/>        print(f&quot;All hoppers are clicked&quot;)<br/>        num_unique_ele = len(commons.get_elements(self.driver, &quot;mcz_landing&quot;, hp_element_number))<br/>        if num_unique_ele != 15:<br/>&gt;           raise Exception(f&quot;Number of unique elements is not 15, actual element is {num_unique_ele}&quot;)<br/><span class="error">E           Exception: Number of unique elements is not 15, actual element is 11</span><br/><br/>pytest_cases/test_mallcz.py:32: Exception<br/> -----------------------------Captured stdout setup------------------------------ <br/>initiating Firefox driver
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Page title is MALL.CZ – bílé zboží, elektronika, PC, outdoor, hobby, hračky, kosmetika, chovatelské potřeby
+Clicks Element allow_privacy from Page mcz_landing
+Scroll DOWN with range + 200, Times: 1
+Scroll DOWN with range + 200, Times: 2
+Scroll DOWN with range + 200, Times: 3
+Scroll DOWN with range + 200, Times: 4
+Scroll DOWN with range + 200, Times: 5
+Scroll DOWN with range + 200, Times: 6
+Scroll DOWN with range + 200, Times: 7
+Scroll to element carousel_six from Page mcz_landing, show element on top of the page
+Clicks Element hooper_six from Page mcz_landing
+Click hooper times: 1
+Clicks Element hooper_six from Page mcz_landing
+Click hooper times: 2
+Clicks Element hooper_six from Page mcz_landing
+Click hooper times: 3
+Clicks Element hooper_six from Page mcz_landing
+Click hooper times: 4
+Clicks Element hooper_six from Page mcz_landing
+Click hooper times: 5
+Clicks Element hooper_six from Page mcz_landing
+Click hooper times: 6
+Clicks Element hooper_six from Page mcz_landing
+Click hooper times: 7
+All hoppers are clicked
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Closed browser
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">pytest_cases/test_mallcz.py::TestMallcz::test_check_carousel[carousel_seven-hooper_seven-hp_element_seven]</td>
+          <td class="col-duration">22.63</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div class="image"><a href="html_screenshots/scr20230530-122525.png"><img src="html_screenshots/scr20230530-122525.png"></a></div></div>
+            <div class="log">self = &lt;test_mallcz.TestMallcz object at 0x1029f7460&gt;, extra = [], carousel_number = &#x27;carousel_seven&#x27;, hooper_number = &#x27;hooper_seven&#x27;, hp_element_number = &#x27;hp_element_seven&#x27;<br/><br/>    @pytest.mark.parametrize(&#x27;carousel_number, hooper_number, hp_element_number&#x27;,<br/>                             [(&quot;carousel_one&quot;, &quot;hooper_one&quot;, &quot;hp_element_one&quot;),<br/>                              (&quot;carousel_two&quot;, &quot;hooper_two&quot;, &quot;hp_element_two&quot;),<br/>                              (&quot;carousel_three&quot;, &quot;hooper_three&quot;, &quot;hp_element_three&quot;),<br/>                              (&quot;carousel_four&quot;, &quot;hooper_four&quot;, &quot;hp_element_four&quot;),<br/>                              (&quot;carousel_five&quot;, &quot;hooper_five&quot;, &quot;hp_element_five&quot;),<br/>                              (&quot;carousel_six&quot;, &quot;hooper_six&quot;, &quot;hp_element_six&quot;),<br/>                              (&quot;carousel_seven&quot;, &quot;hooper_seven&quot;, &quot;hp_element_seven&quot;)])<br/>    def test_check_carousel(self, extra, carousel_number, hooper_number, hp_element_number):<br/>        print(f&quot;Page title is {self.driver.title}&quot;)<br/>        bf.clicks(self.driver, &quot;mcz_landing&quot;, &quot;allow_privacy&quot;)<br/>        self.driver.delete_all_cookies()<br/>        bf.scroll_until_element_exist(self.driver, &quot;mcz_landing&quot;, carousel_number, &quot;+ 200&quot;)<br/>&gt;       bf.scroll_at_top(self.driver, &quot;mcz_landing&quot;, carousel_number)<br/><br/>pytest_cases/test_mallcz.py:20: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/>src/base/base_function.py:26: in scroll_at_top<br/>    ???<br/>src/base/commons.py:21: in get_element<br/>    element = driver.find_element(By.XPATH, locator)<br/>venv/lib/python3.9/site-packages/selenium/webdriver/remote/webdriver.py:831: in find_element<br/>    return self.execute(Command.FIND_ELEMENT, {&quot;using&quot;: by, &quot;value&quot;: value})[&quot;value&quot;]<br/>venv/lib/python3.9/site-packages/selenium/webdriver/remote/webdriver.py:440: in execute<br/>    self.error_handler.check_response(response)<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ <br/><br/>self = &lt;selenium.webdriver.remote.errorhandler.ErrorHandler object at 0x105808220&gt;<br/>response = {&#x27;status&#x27;: 404, &#x27;value&#x27;: &#x27;{&quot;value&quot;:{&quot;error&quot;:&quot;no such element&quot;,&quot;message&quot;:&quot;Unable to locate element: (//div[@class=\&#x27;cms...red/webdriver/Errors.sys.mjs:395:5\\nelement.find/&lt;/&lt;@chrome://remote/content/marionette/element.sys.mjs:134:16\\n&quot;}}&#x27;}<br/><br/>    def check_response(self, response: Dict[str, Any]) -&gt; None:<br/>        &quot;&quot;&quot;Checks that a JSON response from the WebDriver does not have an<br/>        error.<br/>    <br/>        :Args:<br/>         - response - The JSON response from the WebDriver server as a dictionary<br/>           object.<br/>    <br/>        :Raises: If the response contains an error message.<br/>        &quot;&quot;&quot;<br/>        status = response.get(&quot;status&quot;, None)<br/>        if not status or status == ErrorCode.SUCCESS:<br/>            return<br/>        value = None<br/>        message = response.get(&quot;message&quot;, &quot;&quot;)<br/>        screen: str = response.get(&quot;screen&quot;, &quot;&quot;)<br/>        stacktrace = None<br/>        if isinstance(status, int):<br/>            value_json = response.get(&quot;value&quot;, None)<br/>            if value_json and isinstance(value_json, str):<br/>                import json<br/>    <br/>                try:<br/>                    value = json.loads(value_json)<br/>                    if len(value) == 1:<br/>                        value = value[&quot;value&quot;]<br/>                    status = value.get(&quot;error&quot;, None)<br/>                    if not status:<br/>                        status = value.get(&quot;status&quot;, ErrorCode.UNKNOWN_ERROR)<br/>                        message = value.get(&quot;value&quot;) or value.get(&quot;message&quot;)<br/>                        if not isinstance(message, str):<br/>                            value = message<br/>                            message = message.get(&quot;message&quot;)<br/>                    else:<br/>                        message = value.get(&quot;message&quot;, None)<br/>                except ValueError:<br/>                    pass<br/>    <br/>        exception_class: Type[WebDriverException]<br/>        if status in ErrorCode.NO_SUCH_ELEMENT:<br/>            exception_class = NoSuchElementException<br/>        elif status in ErrorCode.NO_SUCH_FRAME:<br/>            exception_class = NoSuchFrameException<br/>        elif status in ErrorCode.NO_SUCH_SHADOW_ROOT:<br/>            exception_class = NoSuchShadowRootException<br/>        elif status in ErrorCode.NO_SUCH_WINDOW:<br/>            exception_class = NoSuchWindowException<br/>        elif status in ErrorCode.STALE_ELEMENT_REFERENCE:<br/>            exception_class = StaleElementReferenceException<br/>        elif status in ErrorCode.ELEMENT_NOT_VISIBLE:<br/>            exception_class = ElementNotVisibleException<br/>        elif status in ErrorCode.INVALID_ELEMENT_STATE:<br/>            exception_class = InvalidElementStateException<br/>        elif (<br/>            status in ErrorCode.INVALID_SELECTOR<br/>            or status in ErrorCode.INVALID_XPATH_SELECTOR<br/>            or status in ErrorCode.INVALID_XPATH_SELECTOR_RETURN_TYPER<br/>        ):<br/>            exception_class = InvalidSelectorException<br/>        elif status in ErrorCode.ELEMENT_IS_NOT_SELECTABLE:<br/>            exception_class = ElementNotSelectableException<br/>        elif status in ErrorCode.ELEMENT_NOT_INTERACTABLE:<br/>            exception_class = ElementNotInteractableException<br/>        elif status in ErrorCode.INVALID_COOKIE_DOMAIN:<br/>            exception_class = InvalidCookieDomainException<br/>        elif status in ErrorCode.UNABLE_TO_SET_COOKIE:<br/>            exception_class = UnableToSetCookieException<br/>        elif status in ErrorCode.TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.SCRIPT_TIMEOUT:<br/>            exception_class = TimeoutException<br/>        elif status in ErrorCode.UNKNOWN_ERROR:<br/>            exception_class = WebDriverException<br/>        elif status in ErrorCode.UNEXPECTED_ALERT_OPEN:<br/>            exception_class = UnexpectedAlertPresentException<br/>        elif status in ErrorCode.NO_ALERT_OPEN:<br/>            exception_class = NoAlertPresentException<br/>        elif status in ErrorCode.IME_NOT_AVAILABLE:<br/>            exception_class = ImeNotAvailableException<br/>        elif status in ErrorCode.IME_ENGINE_ACTIVATION_FAILED:<br/>            exception_class = ImeActivationFailedException<br/>        elif status in ErrorCode.MOVE_TARGET_OUT_OF_BOUNDS:<br/>            exception_class = MoveTargetOutOfBoundsException<br/>        elif status in ErrorCode.JAVASCRIPT_ERROR:<br/>            exception_class = JavascriptException<br/>        elif status in ErrorCode.SESSION_NOT_CREATED:<br/>            exception_class = SessionNotCreatedException<br/>        elif status in ErrorCode.INVALID_ARGUMENT:<br/>            exception_class = InvalidArgumentException<br/>        elif status in ErrorCode.NO_SUCH_COOKIE:<br/>            exception_class = NoSuchCookieException<br/>        elif status in ErrorCode.UNABLE_TO_CAPTURE_SCREEN:<br/>            exception_class = ScreenshotException<br/>        elif status in ErrorCode.ELEMENT_CLICK_INTERCEPTED:<br/>            exception_class = ElementClickInterceptedException<br/>        elif status in ErrorCode.INSECURE_CERTIFICATE:<br/>            exception_class = InsecureCertificateException<br/>        elif status in ErrorCode.INVALID_COORDINATES:<br/>            exception_class = InvalidCoordinatesException<br/>        elif status in ErrorCode.INVALID_SESSION_ID:<br/>            exception_class = InvalidSessionIdException<br/>        elif status in ErrorCode.UNKNOWN_METHOD:<br/>            exception_class = UnknownMethodException<br/>        else:<br/>            exception_class = WebDriverException<br/>        if not value:<br/>            value = response[&quot;value&quot;]<br/>        if isinstance(value, str):<br/>            raise exception_class(value)<br/>        if message == &quot;&quot; and &quot;message&quot; in value:<br/>            message = value[&quot;message&quot;]<br/>    <br/>        screen = None  # type: ignore[assignment]<br/>        if &quot;screen&quot; in value:<br/>            screen = value[&quot;screen&quot;]<br/>    <br/>        stacktrace = None<br/>        st_value = value.get(&quot;stackTrace&quot;) or value.get(&quot;stacktrace&quot;)<br/>        if st_value:<br/>            if isinstance(st_value, str):<br/>                stacktrace = st_value.split(&quot;\n&quot;)<br/>            else:<br/>                stacktrace = []<br/>                try:<br/>                    for frame in st_value:<br/>                        line = frame.get(&quot;lineNumber&quot;, &quot;&quot;)<br/>                        file = frame.get(&quot;fileName&quot;, &quot;&lt;anonymous&gt;&quot;)<br/>                        if line:<br/>                            file = f&quot;{file}:{line}&quot;<br/>                        meth = frame.get(&quot;methodName&quot;, &quot;&lt;anonymous&gt;&quot;)<br/>                        if &quot;className&quot; in frame:<br/>                            meth = f&quot;{frame[&#x27;className&#x27;]}.{meth}&quot;<br/>                        msg = &quot;    at %s (%s)&quot;<br/>                        msg = msg % (meth, file)<br/>                        stacktrace.append(msg)<br/>                except TypeError:<br/>                    pass<br/>        if exception_class == UnexpectedAlertPresentException:<br/>            alert_text = None<br/>            if &quot;data&quot; in value:<br/>                alert_text = value[&quot;data&quot;].get(&quot;text&quot;)<br/>            elif &quot;alert&quot; in value:<br/>                alert_text = value[&quot;alert&quot;].get(&quot;text&quot;)<br/>            raise exception_class(message, screen, stacktrace, alert_text)  # type: ignore[call-arg]  # mypy is not smart enough here<br/>&gt;       raise exception_class(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.NoSuchElementException: Message: Unable to locate element: (//div[@class=&#x27;cms-carousel-a&#x27; or @class=&#x27;cms-carousel-b&#x27;])[7]</span><br/><span class="error">E       Stacktrace:</span><br/><span class="error">E       RemoteError@chrome://remote/content/shared/RemoteError.sys.mjs:8:8</span><br/><span class="error">E       WebDriverError@chrome://remote/content/shared/webdriver/Errors.sys.mjs:183:5</span><br/><span class="error">E       NoSuchElementError@chrome://remote/content/shared/webdriver/Errors.sys.mjs:395:5</span><br/><span class="error">E       element.find/&lt;/&lt;@chrome://remote/content/marionette/element.sys.mjs:134:16</span><br/><br/>venv/lib/python3.9/site-packages/selenium/webdriver/remote/errorhandler.py:245: NoSuchElementException<br/> -----------------------------Captured stdout setup------------------------------ <br/>initiating Firefox driver
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Page title is MALL.CZ – bílé zboží, elektronika, PC, outdoor, hobby, hračky, kosmetika, chovatelské potřeby
+Clicks Element allow_privacy from Page mcz_landing
+Scroll DOWN with range + 200, Times: 1
+Scroll DOWN with range + 200, Times: 2
+Scroll DOWN with range + 200, Times: 3
+Scroll DOWN with range + 200, Times: 4
+Scroll DOWN with range + 200, Times: 5
+Scroll DOWN with range + 200, Times: 6
+Scroll DOWN with range + 200, Times: 7
+Scroll DOWN with range + 200, Times: 8
+Scroll DOWN with range + 200, Times: 9
+Scroll DOWN with range + 200, Times: 10
+Scroll DOWN with range + 200, Times: 11
+Scroll DOWN with range + 200, Times: 12
+Scroll DOWN with range + 200, Times: 13
+Scroll DOWN with range + 200, Times: 14
+Scroll DOWN with range + 200, Times: 15
+Scroll DOWN with range + 200, Times: 16
+Scroll DOWN with range + 200, Times: 17
+Scroll DOWN with range + 200, Times: 18
+Scroll DOWN with range + 200, Times: 19
+Scroll DOWN with range + 200, Times: 20
+Scroll DOWN with range + 200, Times: 21
+Scroll DOWN with range + 200, Times: 22
+Scroll DOWN with range + 200, Times: 23
+Scroll DOWN with range + 200, Times: 24
+Scroll DOWN with range + 200, Times: 25
+Scroll DOWN with range + 200, Times: 26
+Scroll DOWN with range + 200, Times: 27
+Scroll DOWN with range + 200, Times: 28
+Scroll DOWN with range + 200, Times: 29
+Scroll DOWN with range + 200, Times: 30
+Scroll DOWN with range + 200, Times: 31
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Closed browser
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">pytest_cases/test_mallcz.py::TestMallcz::test_check_carousel[carousel_five-hooper_five-hp_element_five]</td>
+          <td class="col-duration">14.20</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div><div class="image"><a href="html_screenshots/scr20230530-122449.png"><img src="html_screenshots/scr20230530-122449.png"></a></div></div>
+            <div class="log"> -----------------------------Captured stdout setup------------------------------ <br/>initiating Firefox driver
+<br/> ------------------------------Captured stdout call------------------------------ <br/>Page title is MALL.CZ – bílé zboží, elektronika, PC, outdoor, hobby, hračky, kosmetika, chovatelské potřeby
+Clicks Element allow_privacy from Page mcz_landing
+Scroll DOWN with range + 200, Times: 1
+Scroll DOWN with range + 200, Times: 2
+Scroll DOWN with range + 200, Times: 3
+Scroll DOWN with range + 200, Times: 4
+Scroll DOWN with range + 200, Times: 5
+Scroll DOWN with range + 200, Times: 6
+Scroll DOWN with range + 200, Times: 7
+Scroll DOWN with range + 200, Times: 8
+Scroll DOWN with range + 200, Times: 9
+Scroll to element carousel_five from Page mcz_landing, show element on top of the page
+Clicks Element hooper_five from Page mcz_landing
+Click hooper times: 1
+Clicks Element hooper_five from Page mcz_landing
+Click hooper times: 2
+Clicks Element hooper_five from Page mcz_landing
+Click hooper times: 3
+Clicks Element hooper_five from Page mcz_landing
+Click hooper times: 4
+Clicks Element hooper_five from Page mcz_landing
+Click hooper times: 5
+Clicks Element hooper_five from Page mcz_landing
+Click hooper times: 6
+Clicks Element hooper_five from Page mcz_landing
+Click hooper times: 7
+Clicks Element hooper_five from Page mcz_landing
+Click hooper times: 8
+Clicks Element hooper_five from Page mcz_landing
+Click hooper times: 9
+Clicks Element hooper_five from Page mcz_landing
+Click hooper times: 10
+Clicks Element hooper_five from Page mcz_landing
+Click hooper times: 11
+All hoppers are clicked
+Number of unique elements is 15
+<br/> ----------------------------Captured stdout teardown---------------------------- <br/>Closed browser
+<br/></div></td></tr></tbody></table></body></html>

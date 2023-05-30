@@ -1,0 +1,6 @@
+*.pyc
+*.exe
+*.zip
+Drivers/
+.idea/
+geckodriver.log
