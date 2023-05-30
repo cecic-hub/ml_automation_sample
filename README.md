@@ -13,7 +13,7 @@ pip install -r requirements.txt
 ## Command to run the project
 
 ```bash
-python -m pytest -k test_check_carousel --html=src/report/pytest-html/report.html --self-contained-html
+python -X utf8 -m pytest -k test_check_carousel --html=src/report/pytest-html/report.html --self-contained-html
 ```
 
 ## Project Structure
